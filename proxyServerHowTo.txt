@@ -9,6 +9,7 @@ the /etc/crontab file. You are editing the crontab of the
 'sudo privileged account' by using crontab -e on that user's terminal .
 See 'man crontab'
 
+The file 'count',is set to 120 minutes by default.
 
 ================================================================================
 MINIMIZED-RUNTIME SERVER

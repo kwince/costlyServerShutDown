@@ -1,5 +1,5 @@
 #!/bin/bash
 
-echo "3300" > $HOME/shutdown/count
+echo "120" > $HOME/shutdown/count
 sleep 1
 
