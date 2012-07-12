@@ -3,15 +3,16 @@
 ###########################################################################
 # set script Constants
 ###########################################################################
-MAX_WAIT_FOR_RUNNING_STATUS=90
-MAX_WAIT_FOR_STOPPED_STATUS=90
+MAX_WAIT_FOR_RUNNING_STATUS=90 #seconds
+MAX_WAIT_FOR_STOPPED_STATUS=90 #seconds
 
-INSTANCE_ID="i-04478e7c"
-CERTIFICATE_FILE="$HOME/.ec2/cert-ONTS2XBLVVMT3NAHBSOBAA42IUNKWBI5.pem"
-PRIVATE_KEY="$HOME/.ec2/pk-ONTS2XBLVVMT3NAHBSOBAA42IUNKWBI5.pem"
-REGION="us-east-1"
+INSTANCE_ID="i-xxxxxxxx"
+CERTIFICATE_FILE="$HOME/.ec2/cert-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pem"
+PRIVATE_KEY="$HOME/.ec2/pk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pem"
+REGION="xx-xxxx-x"
 AWS_URL="https://ec2.amazonaws.com"
-ELASTIC_IP_ADDRESS="23.23.218.188"
+ELASTIC_IP_ADDRESS="xxx.xxx.xxx.xxx"
+ROOT_USER_NAME="as_per_your_sudo_listed_login_to_expensive_machine"
 
 output=""
 
@@ -21,7 +22,7 @@ output=""
 # stops any current shutdown, then initiates another - 55 minute window
 ###########################################################################
 resetShutDown () {
-  ssh -i $HOME/.ec2/ContinuousIntegration.pem bitnami@23.23.218.188  sudo bash "\$HOME/shutdown/resetShutDown"
+  ssh -i $HOME/.ec2/ContinuousIntegration.pem $ROOT_USER_NAME@$ELASTIC_IP_ADDRESS  sudo bash "\$HOME/shutdown/resetShutDown"
 }
 
 
@@ -119,7 +120,7 @@ failBuild () {
 #   result ends in the instance id. That is what is tested for.
 #
 # TODO
-# This will fail/exit by exception(?) if the device is stopped or stopping
+# This will fail/exit by exception from Amazon tools(?) if the device is stopped or stopping
 #   or mabye even pending. Don't know yet how to fix that yet.
 #
 ###########################################################################
