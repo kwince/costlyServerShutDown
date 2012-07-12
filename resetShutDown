@@ -1,5 +1,7 @@
 #!/bin/bash
 
-echo "120" > $HOME/shutdown/count
+SHUTDOWN_TIME_IN_MINUTES="120"
+
+echo "$SHUTDOWN_TIME_IN_MINUTES" > $HOME/shutdown/count
 sleep 1
 

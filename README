@@ -1,1 +1,24 @@
-This is the project started to allow an inexpensive amazon server to start and stop an expensive server and shut down automatically with no usage after 120 minutes.
+This body of code is to allow an inexpensive Amazon EC2 server 
+  to 'keep alive' a running, expensive Amazon EC2 server while the
+  expensive Amazon EC2 server is being regularly used.
+  The inexpensive Amazon EC2 server merely needs to have a
+  URL on its web server regularly accessed in less than 120 minute intervals.
+  With lack of use, the expensive Amazon EC2 Server will shut itself down
+  automatically after 120 minutes.
+
+The time is modifiable by changing 
+  $SHUTDOWN_TIME_IN_MINUTES
+  In the file
+  resetShutDown
+
+The algorithm and other feature sets may improve over time by the author or
+  other intereseted parties. If you want to improve it, fork the project
+  and add improvements, ask to have it merged. If you wish to watch it
+  for improvements, add your name on the repository's watch list.
+
+See LICENSE file for any of:
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of this Software.
+  The author assumes NO responsiblity for the use of this Software; Again see LICENSE file.
+
+See proxyServerHowTo.txt
+  To learn how to install and use this project.
