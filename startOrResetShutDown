@@ -1,0 +1,211 @@
+#!/bin/bash
+
+###########################################################################
+# set script Constants
+###########################################################################
+MAX_WAIT_FOR_RUNNING_STATUS=90
+MAX_WAIT_FOR_STOPPED_STATUS=90
+
+INSTANCE_ID="i-04478e7c"
+CERTIFICATE_FILE="$HOME/.ec2/cert-ONTS2XBLVVMT3NAHBSOBAA42IUNKWBI5.pem"
+PRIVATE_KEY="$HOME/.ec2/pk-ONTS2XBLVVMT3NAHBSOBAA42IUNKWBI5.pem"
+REGION="us-east-1"
+AWS_URL="https://ec2.amazonaws.com"
+ELASTIC_IP_ADDRESS="23.23.218.188"
+
+output=""
+
+
+
+###########################################################################
+# stops any current shutdown, then initiates another - 55 minute window
+###########################################################################
+resetShutDown () {
+  ssh -i $HOME/.ec2/ContinuousIntegration.pem bitnami@23.23.218.188  sudo bash "\$HOME/shutdown/resetShutDown"
+}
+
+
+###########################################################################
+# Gets the current status of $INSTANCE_ID instance
+###########################################################################
+setInstanceStatus () {
+  instanceStatus=`ec2-describe-instances $INSTANCE_ID -C $CERTIFICATE_FILE -K $PRIVATE_KEY --region $REGION -U $AWS_URL`
+
+  is_pending="`echo $instanceStatus|grep -c " pending "`"
+  is_running="`echo $instanceStatus|grep -c " running "`"
+  is_shutting_down="`echo $instanceStatus|grep -c " shutting-down "`"
+  is_terminated="`echo $instanceStatus|grep -c " terminated "`"
+  is_stopping="`echo $instanceStatus|grep -c " stopping "`"
+  is_stopped="`echo $instanceStatus|grep -c " stopped "`"
+
+  if   [ "$is_pending" -eq "1" ]; then
+    status="pending"
+  elif [  "$is_running" -eq "1" ]; then
+    status="running"
+  elif [  "$is_shutting_down" -eq "1" ]; then
+    status="shutting-down"
+  elif [  "$is_terminated" -eq "1" ]; then
+    status="terminated"
+  elif [  "$is_stopping" -eq "1" ]; then
+    status="stopping"
+  elif [  "$is_stopped" -eq "1" ]; then
+    status="stopped"
+  else
+    status="bad-instance-state"
+  fi
+}
+
+###########################################################################
+# Sets the value of the global variable 'startUpStatus'
+###########################################################################
+triggerStart () {
+  startUpStatus=`ec2-start-instances $INSTANCE_ID -C $CERTIFICATE_FILE -K $PRIVATE_KEY --region $REGION -U $AWS_URL | awk '{ print $NF }'`
+  output="$output\nServer sent startup command and result was - $startUpStatus"
+}
+
+
+###########################################################################
+# Sets the value of the global variable 'stopStatus'
+###########################################################################
+triggerStop () {
+  stopStatus=`ec2-stop-instances $INSTANCE_ID -C $CERTIFICATE_FILE -K $PRIVATE_KEY --region $REGION -U $AWS_URL | awk '{ print $NF }'`
+  output="$output\nServer sent stop command and result was - $stopStatus"
+}
+
+
+###########################################################################
+# waits for server to transition to 'running' for the time in $MAX_WAIT_FOR_RUNNING_STATUS
+###########################################################################
+checkForRunningStatusUntilMaxTime () {
+  endTime=$(( `date +%s` + $MAX_WAIT_FOR_RUNNING_STATUS ))
+  while [ `date +%s` -lt "$endTime" ]; do
+    setInstanceStatus
+    if [ "running" = "$status" ]; then
+      return 0
+    fi
+  done
+  output="$output\nMax time of $MAX_WAIT_FOR_RUNNING_STATUS secs passed. Server did not transition to running"
+  return 1
+}
+
+
+###########################################################################
+# waits for server to transition to 'stopped' for the time in $MAX_WAIT_FOR_STOPED_STATUS
+###########################################################################
+checkForStoppedStatusUntilMaxTime () {
+  endTime=$(( `date +%s` + $MAX_WAIT_FOR_STOPPED_STATUS ))
+  while [ `date +%s` -lt "$endTime" ]; do
+    setInstanceStatus	
+    if [ "stopped" = "$status" ]; then
+      return 0
+    fi
+  done
+  output="$output\nMax time of $MAX_WAIT_FOR_STOPPED_STATUS secs passed. Server did not transition to stopped"
+  return 1
+}
+
+
+###########################################################################
+# How to terminate build?
+###########################################################################
+failBuild () {
+  output="$output\nThe build should have been failed / killed here"
+}
+
+
+###########################################################################
+# Associates a purchased, elastic IP with the instance. Can be done
+#   if it is already done. With either new or 'reassignement' the 
+#   result ends in the instance id. That is what is tested for.
+#
+# TODO
+# This will fail/exit by exception(?) if the device is stopped or stopping
+#   or mabye even pending. Don't know yet how to fix that yet.
+#
+###########################################################################
+associateIpAddress() {
+  associateIpStatus=`ec2-associate-address -i $INSTANCE_ID $ELASTIC_IP_ADDRESS -C $CERTIFICATE_FILE -K $PRIVATE_KEY --region $REGION -U $AWS_URL | awk '{ print $NF }'`
+  if [ $INSTANCE_ID = "$associateIpStatus" ] 
+  then
+      ipAddressAssociated="0"
+  else
+      ipAddressAssociated="1"
+  fi
+}
+
+
+#==========================================================================
+# Main script execution starts here
+#==========================================================================
+for (( i=1; i<=2; i++ ))
+do
+  setInstanceStatus
+#  echo "Status at top of loop was $status"  #for troubleshooting
+  case "$status" in
+      pending)
+          checkForRunningStatusUntilMaxTime
+          if [ "$status" != "running" ]; then
+            failBuild
+            break
+          else
+            associateIpAddress
+            if [ ! ipAddressAssociated ]; then            
+              echo "Server was started or already started but IP address Unable to be Associated"
+              triggerStop
+              break
+            else
+              resetShutDown            
+              echo "Server was started or already started and is now running with IP address associated"
+              break
+            fi
+          fi
+          ;;
+       
+      running)
+          echo "Server was already running, and is now running"
+          associateIpAddress
+          if [ ! ipAddressAssociated ]; then            
+            echo "Server was already running but IP address Unable to be Associated"
+            triggerStop
+            break
+          else            
+            resetShutDown
+            echo "Server was already running and is now running with IP address associated"
+            echo "SERVER WILL RUN FOR --MINUTES PROGRAMMED ON SERVER--"
+            break
+          fi
+          ;;
+       
+      stopping)
+          checkForStoppedStatusUntilMaxTime
+          setInstanceStatus # probably redundant, but good practice when using global vars
+          if [ "$status" != "stopped"  ]; then
+            failBuild
+            break
+          else
+            echo "Server was stopping, and it will now be started"
+            triggerStart
+          fi
+          ;;
+
+      stopped)
+          if [ "$i" -eq "2" ]; then
+            echo "Server did not respond to a start up command"
+            failBuild
+          else
+            echo "Found instance stopped. Starting will be attempted"
+            triggerStart
+          fi
+          ;;
+
+      *)
+          echo "Instance status is $status, not able to start"
+          triggerStop
+          echo "Server was sent stop command"
+          failBuild
+          break
+          ;;
+  esac
+done
+
+

@@ -1,0 +1,195 @@
+This is an OUTLINE. It's assumed you know how to work with Amazon EC2 instances.
+
+Root account names on virtual servers in clouds are often NOT 'root'.
+In fact using 'root' is discouraged. On ubuntu servers, some names
+seen are 'ubuntu', or 'bitnami'. 
+
+That is why using 'crontab -e' is used instead of hand editing
+the /etc/crontab file. You are editing the crontab of the
+'sudo privileged account' by using crontab -e on that user's terminal .
+See 'man crontab'
+
+
+================================================================================
+MINIMIZED-RUNTIME SERVER
+  On your local machine
+    mkdir ./tmp
+    copy all files from this project to ./tmp
+  sftp into minimized-runtime server
+    put ./tmp/count 
+    put ./tmp/countDown
+    put ./tmp/startOrResetShutDown
+  exit sftp
+    rm ./tmp/count 
+    rm ./tmp/countDown
+    rm ./tmp/startOrResetShutDown
+  ssh into minimized-runtime server and do the following:
+    Create the crontab line listed by using 'crontab -e'
+      insert following line into bottom of the file
+      "*/1 * * * * bash /home/${root_account_name}/shutdown/countDown >/dev/null 2>&1"
+        (once a minute, take out quotation marks)
+      <ctrl>x, accept file name
+    mkdir $HOME/shutdown
+  Move the files listed to their location
+    $HOME/shutdown/count
+    $HOME/shutdown/countDown
+    $HOME/shutdown/startOrResetShutDown
+  Exit from ssh session to the minimized-runtime server
+
+
+================================================================================
+PROXY SERVER
+  AMAZON AMI 
+    ami-8cfa58e5 (micro, 32 bit, ubuntu machine)
+      instantiate one of the above
+  Edit the files from this project to replace the names of:
+	INSTANCE_ID="i-xxxxxxxx"
+	CERTIFICATE_FILE="$HOME/.ec2/cert-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pem"
+	PRIVATE_KEY="$HOME/.ec2/pk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pem"
+	REGION="xx-xxxx-x"
+	AWS_URL="https://ec2.amazonaws.com"
+	ELASTIC_IP_ADDRESS="xxx.xxx.xxx.xxx"
+  Download the following tools
+    http://aws.amazon.com/developertools/351/ 
+      the api tools under the 'Download' heading
+  Push needed files to the root of the new machine
+    copy the api tools zip file to ./tmp
+    sftp -i $HOME/.ec2/private_key_above.pem \
+      ubuntu@{'Public DNS' from lower screen section of instance description(
+        (for example: ec2-6.66.166.6.compute-1.amazonaws.com)
+      mput ./tmp/*
+      exit
+  Log onto server
+    ssh -i $HOME/.ec2/private_key_above.pem \
+      ubuntu@{'Public DNS' from lower screen section of instance description}
+      (for example: ec2-6.66.166.6.compute-1.amazonaws.com)
+  Add Sun Java to machine
+    sudo add-apt-repository ppa:webupd8team/java
+    sudo apt-get update
+    sudo apt-get install oracle-java7-installer
+  Add web server to instance
+    sudo tasksel --list-tasks (to see what tasksel is all about: 'i'=installed)
+    sudo tasksel install lamp-server
+    sudo apt-get purge mysql* (me no like mysql)
+    sudo tasksel install postgresql-server
+  Update and upgrade all packages and get security updates
+    sudo apt-get update
+    sudo apt-get upgrade
+  Set up automatic security upgrades
+    https://help.ubuntu.com/community/AutomaticSecurityUpdates/
+      (use nano, vi, vim, or other text editors instead of the gui ones listed)
+  Create directories needed
+    sudo mkdir /var/www/.ec2; sudo chown www-data:www-data /var/www/.ec2
+    sudo mkdir /var/www/.ssh; sudo chown www-data:www-data /var/www/.ssh
+    sudo mkdir /var/www-scripts
+    sudo mkdir /var/www-scripts/shutdown
+  Install needed program
+    sudo apt-get install unzip
+  Install EC2 tools
+    sudo unzip ec2-api-tools.zip
+    sudo mv ec2-api-tools-x.x.x.x/* /var/www/.ec2
+    sudo mv *.pem /var/www/.ec2
+    sudo chmod 700 /var/www/.ec2/*.pem
+    sudo chown -R www-data:www-data /var/www/.ec2
+  Find java home
+    which java
+      (will return something like: /usr/lib/jvm/java-7-oracle/bin/java)
+      (you need up to the '/bin/java' part or: '/usr/lib/jvm/java-7-oracle')
+      (this will be $JAVA_HOME)
+  Set up 'www-data' user's environment during bash sessions
+    sudo nano /var/www/.bashrc
+      (cut and paste following lines and edit in place)
+
+#needed for some reason--------------------------------------------------------------
+export HOME=/var/www
+
+#for ec2/aws toolset-----------------------------------------------------------------
+export JAVA_HOME=/usr/lib/jvm/java-7-oracle (what YOU found above)<-<-<-xxxxxxxxxxxxx
+export PATH=$JAVA_HOME/bin:$PATH
+
+#for ec2/aws toolset-----------------------------------------------------------------
+export EC2_HOME=$HOME/.ec2
+export PATH=$PATH:$EC2_HOME/bin
+
+#add ec2 tools to default path
+#export PATH=$HOME/.ec2/bin:$PATH
+
+    '<ctrl>x' to save, accept file name
+    sudo chown www-data:www-data /var/www/.bashrc
+  Set up apache server to avoid listing contents of wrong files,
+  keep it from being outside of its document root,
+  and to keep it from being in $HOME/.ssh and $HOME/.ec2 direcories
+    sudo nano /etc/apache2/apache2.conf
+      (cut and paste the follwoing lines at end of file)
+
+# Prevent directory Listing of filesystem
+<Directory />
+  Order deny,allow
+  Deny from all
+</Directory>
+
+# Allow serving EXACT file names from document root, but not listing directory contents
+<Directory /var/www/*>
+ Order allow,deny
+  allow from all
+  Options FollowSymLinks
+</Directory>
+
+# block all directories in document root that begin with .
+<Directory /var/www/.*>
+  Order deny,allow
+  Deny from all
+</Directory>
+
+    '<ctrl>x' to save, accept file name
+    sudo /etc/init.d/apache2 restart
+  Move file called by apache when you go to http://ec2-api-tools-x.x.x.x/startOrResetShutDown.php
+    mv startOrResetShutDown.php /var/www
+    sudo chmod 400 /var/www.startOrResetShutDown.php
+  
+
+===========================================================================
+Installing the Trigger URL
+
+For exmaple on cloudbees.com projects, or any of your own Jenkins servers,
+you could put a prebuild step as bash code that executes:
+
+  "wget http://ec2-xxx-xxx-xxx-xxx.compute-1.amazonaws.com/startOrResetShutDown.php -q -O -"
+
+Ths simply does a GET request to the URL and returns the file to stdin, vs 
+storing it as a file.
+
+What's Next:
+============================================================================
+
+1/It might be good to store the php file above in a directory named
+with a GUID, so that it's nearly impossible to know this url and
+have hackers access this link and cost you money or processor time.
+
+  Example:
+  mkdir /var/www/21EC2020-3AEA-1069-A2DD-08002B30309D
+    mv startOrResetShutDown.php /var/www/21EC2020-3AEA-1069-A2DD-08002B30309D
+    sudo chmod 400 /var/www/21EC2020-3AEA-1069-A2DD-08002B30309D/startOrResetShutDown.php
+
+  DON'T use that one, "it's taken" ;-) (it came from wikipedia article on GUIDs)
+
+2/ If doing this for multiple machines AND you've obfuscated the url as above, you will
+   have to install multiple versions of the php in the directory, or pass the instance id
+   in a variable. You COULD name the files 'startOrResetShutDwon-i-xxxxxxx.php substituting
+   the instance id for i.xxxxxxxx.
+   You will also have to edit the instance id in each file. 
+
+3/ Since everything about this is on the URL address line of the requests, every relaying
+server in the Internet path to your Proxy server has a record of the URL for long time,
+(thank  you terrorists, conservatives in opposing religious cultures, and the US government).
+This makes it a huge security hole.
+
+So you might want to change the urls to use SSL (https) and the php script to read a POST
+variable, or two of them. (one would be a UUID as a password, and the other would be
+the instance_id). This modificaton is WAY beyond the scope of this document.
+
+
+====================================================================================
+Hope this helps, fork and improve it!
+
+  

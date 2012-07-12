@@ -1,0 +1,23 @@
+#!/bin/sh
+
+count=`cat $HOME/shutdown/count`
+count=$(($count-1))
+echo $count > $HOME/shutdown/count
+echo "count was $count"
+
+sleep 1 # let disk buffer flush
+
+if [ "$count" -gt 1 ]; then
+  echo "shutdown count was greater than 1"
+elif [ "$count" -eq 0  ]; then
+  sudo shutdown -P now
+elif [ "$count" -lt 0  ]; then
+  echo "shutdown count was less than 0"
+  echo "resetting count, assumed negative number meant post shutdown,"
+  echo "  and subsequent reboot"
+  `$HOME/shutdown/resetShutDown`
+fi
+
+
+
+
